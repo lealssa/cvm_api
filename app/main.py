@@ -1,5 +1,5 @@
 from fastapi import FastAPI
-from .routers import cad_fi
+from .routers import cad_fi, fi_diario
 
 app = FastAPI(
     title="CVM API",
@@ -17,3 +17,4 @@ app = FastAPI(
 )
 
 app.include_router(cad_fi.router)
+app.include_router(fi_diario.router)
