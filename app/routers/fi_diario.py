@@ -5,7 +5,7 @@ from ..config import settings
 from ..models.fi_diario_model import FiDiarioModel
 from ..db import client
 from typing import List
-from datetime import date
+from datetime import datetime, date
 
 db = client[settings.cvm_mongodb_db_name]
 
@@ -36,7 +36,7 @@ async def read_fi_diario_by_cnpj(
         description="Data final dos registros no formato ISO 8601"
     )
     ):    
-    mongo_qry = {'$and': [ { 'CNPJ_FUNDO': q }, { 'DT_COMPTC': { '$gte': dt_init.__str__() } }, { 'DT_COMPTC': { '$lte': dt_end.__str__() } } ]}
+    mongo_qry = {'$and': [ { 'CNPJ_FUNDO': q }, { 'DT_COMPTC': { '$gte': datetime.combine(dt_init, datetime.min.time()) } }, { 'DT_COMPTC': { '$lte': datetime.combine(dt_end, datetime.min.time()) } } ]}
     fi_diario = await db.cvm_fi_diario.find(mongo_qry, {'_id': 0, 'DT_COMPTC': 1, 'VL_QUOTA': 1}).sort('DT_COMPTC').to_list(length=1000)
 
     if not fi_diario:
@@ -65,7 +65,7 @@ async def read_fi_diario_by_cnpj(
         description="Data final dos registros no formato ISO 8601"
     )
     ):    
-    mongo_qry = {'$and': [ { 'CNPJ_FUNDO': q }, { 'DT_COMPTC': { '$gte': dt_init.__str__() } }, { 'DT_COMPTC': { '$lte': dt_end.__str__() } } ]}
+    mongo_qry = {'$and': [ { 'CNPJ_FUNDO': q }, { 'DT_COMPTC': { '$gte': datetime.combine(dt_init, datetime.min.time()) } }, { 'DT_COMPTC': { '$lte': datetime.combine(dt_end, datetime.min.time()) } } ]}
     mongo_aggr = [{ "$match": mongo_qry }, { "$group": { "_id": { "mes": { "$substr": ["$DT_COMPTC", 0, 7] }}, "vl_medio": { "$avg": "$VL_QUOTA" } } }]
     fi_mensal = await db.cvm_fi_diario.aggregate(mongo_aggr).to_list(length=1000)
 
@@ -77,7 +77,7 @@ async def read_fi_diario_by_cnpj(
 
 # TODO
 # 1 - Falta estudar como agregar por mes de modo que pegue o valor do ultimo dia do mes
-# 2 - Alterar o cvm_extractor pra salvar o DT_COMPTC em Date
+# 2 - Alterar o cvm_extractor pra salvar o DT_COMPTC em Date - OK
 # 3 - Ajustar a saida pra conseguir retornar em response_model
 
 
