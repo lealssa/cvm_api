@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Query
 import bson
 from pymongo import MongoClient
 from ..config import settings
-from ..models.fi_diario_model import FiDiarioModel
+from ..models.fi_diario_model import FiDiarioModel, FiAgregadoModel
 from ..db import client
 from typing import List
 from datetime import datetime, date
@@ -37,14 +37,14 @@ async def read_fi_diario_by_cnpj(
     )
     ):    
     mongo_qry = {'$and': [ { 'CNPJ_FUNDO': q }, { 'DT_COMPTC': { '$gte': datetime.combine(dt_init, datetime.min.time()) } }, { 'DT_COMPTC': { '$lte': datetime.combine(dt_end, datetime.min.time()) } } ]}
-    fi_diario = await db.cvm_fi_diario.find(mongo_qry, {'_id': 0, 'DT_COMPTC': 1, 'VL_QUOTA': 1}).sort('DT_COMPTC').to_list(length=1000)
+    fi_diario = await db.cvm_fi_diario.find(mongo_qry, {'_id': 0, 'data': '$DT_COMPTC', 'vl_quota': '$VL_QUOTA'}).sort('DT_COMPTC').to_list(length=1000)
 
     if not fi_diario:
         raise HTTPException(status_code=404)
 
     return fi_diario
 
-@router.get("/aggr", response_description="Pega registros mensais de um FI")
+@router.get("/aggr", response_description="Pega registros agregados por mês e ano de um FI (pega o último dia do mês)", response_model=List[FiAgregadoModel])
 async def read_fi_diario_by_cnpj(
     q: str = Query(
         ...,
@@ -66,19 +66,22 @@ async def read_fi_diario_by_cnpj(
     )
     ):    
     mongo_qry = {'$and': [ { 'CNPJ_FUNDO': q }, { 'DT_COMPTC': { '$gte': datetime.combine(dt_init, datetime.min.time()) } }, { 'DT_COMPTC': { '$lte': datetime.combine(dt_end, datetime.min.time()) } } ]}
-    mongo_aggr = [{ "$match": mongo_qry }, { "$group": { "_id": { "mes": { "$substr": ["$DT_COMPTC", 0, 7] }}, "vl_medio": { "$avg": "$VL_QUOTA" } } }]
-    fi_mensal = await db.cvm_fi_diario.aggregate(mongo_aggr).to_list(length=1000)
+    mongo_aggr = { "_id": { "ano": { "$year": "$DT_COMPTC" }, "mes": { "$month": "$DT_COMPTC" }}, "dia_ref": { "$last": "$DT_COMPTC" }, "vl_dia_ref": { "$last": "$VL_QUOTA" }  }
+    mongo_proj = { "_id": 0, "ano": "$_id.ano", "mes": "$_id.mes", "dia_ref": 1, "vl_dia_ref": 1 }
+    full_qry = [{ "$match": mongo_qry }, { "$group": mongo_aggr }, { "$sort" : { "_id.ano": 1, "_id.mes": 1 } }, { "$project": mongo_proj}]
+    
+    fi_aggr = await db.cvm_fi_diario.aggregate(full_qry).to_list(length=1000)
 
-    if not fi_mensal:
+    if not fi_aggr:
         raise HTTPException(status_code=404)
 
-    return fi_mensal
+    return fi_aggr
 
 
 # TODO
-# 1 - Falta estudar como agregar por mes de modo que pegue o valor do ultimo dia do mes
+# 1 - Falta estudar como agregar por mes de modo que pegue o valor do ultimo dia do mes - OK
 # 2 - Alterar o cvm_extractor pra salvar o DT_COMPTC em Date - OK
-# 3 - Ajustar a saida pra conseguir retornar em response_model
+# 3 - Ajustar a saida pra conseguir retornar em response_model - OK
 
 
 # Estudar https://www.mongodb.com/developer/quickstart/python-quickstart-fastapi/
